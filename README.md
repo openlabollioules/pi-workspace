@@ -421,7 +421,7 @@ Interfaces, conventions, skill boundaries, and runtime adapters may evolve as mo
 
 # Pi configuration
 
-## Extensions ve've installed
+## Extensions we've installed
 
 With pi install :
 - npm:@mammothb/pi-office
