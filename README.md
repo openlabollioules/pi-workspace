@@ -417,3 +417,45 @@ The same platform structure is intended to support additional domains and automa
 This repository is currently an experimental automation platform and POC environment.
 
 Interfaces, conventions, skill boundaries, and runtime adapters may evolve as more business processes are implemented and tested.
+
+
+# Pi configuration
+
+## Extensions ve've installed
+
+With pi install :
+- npm:@mammothb/pi-office
+- npm:@nqbao/pi-alchemy
+- npm:@bacnh85/pi-obsidian
+- npm:pi-mcp-adapter
+- npm:pi-subagents
+- npm:@gotgenes/pi-permission-system
+- npm:pi-file-permissions
+- npm:@firstpick/pi-extension-grill-me
+
+## settings.json
+
+Under ~/.pi/agent
+
+```
+{
+  "shellPath": "C:\\Program Files\\Git\\bin\\bash.exe",
+  "defaultThinkingLevel": "medium",
+  "alchemy": {
+    "dbPath": "./data/contract.duckdb",
+    "maxRows": 500
+  },
+  "packages": [
+    "npm:@mammothb/pi-office",
+    "npm:@nqbao/pi-alchemy",
+    "npm:@bacnh85/pi-obsidian",
+    "npm:pi-mcp-adapter",
+    "npm:pi-subagents",
+    "npm:@gotgenes/pi-permission-system",
+    "npm:pi-file-permissions",
+    "npm:@firstpick/pi-extension-grill-me"
+  ],
+"skills": [
+    "G:\\pi-workspace\\.agents\\skills"
+  ]
+}```
