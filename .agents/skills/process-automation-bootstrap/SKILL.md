@@ -3,13 +3,13 @@ name: process-automation-bootstrap
 description: Transforme une description de processus métier en automatisation agentique minimale prête à tester. S'appuie sur @firstpick/pi-extension-grill-me pour l'entretien déterministe et la persistance des décisions, puis ajoute la readiness métier R1-R10, l'inspection existing-data-first, la génération local-first, l'evaluator, la reprise automatique après entretien et la classification de promotion.
 ---
 
-# Process Automation Bootstrap — V2
+# Process Automation Bootstrap — V3
 
 ## Mission
 
 Transformer une description métier, éventuellement incomplète, en une automatisation agentique minimale, testable, traçable, reprenable et documentée.
 
-Cette V2 **ne réimplémente pas le moteur d'entretien interactif**.
+Cette V3 **ne réimplémente pas le moteur d'entretien interactif**.
 
 Lorsqu'une clarification humaine est nécessaire, elle délègue à :
 
@@ -25,6 +25,7 @@ Le bootstrap ajoute uniquement ce qui est spécifique à la conception et à la 
 - readiness R1 à R10 ;
 - détection des lacunes réellement bloquantes ;
 - inspection des données existantes avant toute génération synthétique ;
+- gestion du cycle de vie des sources entre exécutions (ajout, modification, suppression, retraitement) ;
 - Definition of Ready déterministe ;
 - orchestration de l'entretien Grill Me lorsque nécessaire ;
 - reprise automatique demandée après l'entretien ;
@@ -84,7 +85,7 @@ Il traduit les informations connues et les décisions Grill Me en readiness R1-R
 
 # 2. Précondition Grill Me
 
-Cette V2 suppose que l'extension suivante est installée dans Pi :
+Cette V3 suppose que l'extension suivante est installée dans Pi :
 
 ```text
 @firstpick/pi-extension-grill-me
@@ -642,7 +643,374 @@ Ne pas modifier un skill DOMAIN ou COMMON sans accord explicite.
 
 ---
 
-# 17. Architecture minimale
+# 17. Runtime capability resolution
+
+Before generating implementation instructions for any required capability:
+
+1. identify the logical capability required;
+2. inspect the capabilities/tools already exposed by the current harness;
+3. inspect reusable COMMON and DOMAIN skills that abstract this capability;
+4. resolve the logical capability to an existing runtime implementation;
+5. record the exact tool names the generated automation must use;
+6. record whether the capability is already installed and usable offline.
+
+When a required capability is already available:
+
+- explicitly state that it is already available;
+- name the provider/extension;
+- name the exact tools to use;
+- prohibit redundant installation attempts;
+- prohibit Internet searches/downloads when the environment is offline;
+- do not ask the business agent to discover the runtime implementation itself.
+
+Generated skills must describe HOW to invoke required capabilities,
+not merely name the underlying technology.
+
+Example:
+
+BAD:
+
+"Use DuckDB to store obligations."
+
+GOOD:
+
+"Use the existing `structured-data-duckdb` capability backed in Pi by
+`@nqbao/pi-alchemy`. Use `alchemy_query`, `alchemy_tables`,
+`alchemy_schema`, and `alchemy_load` where applicable. DuckDB is embedded;
+do not look for a CLI or attempt installation."
+
+---
+
+# 18. Source lifecycle and change management
+
+Lorsqu'une automatisation consomme une collection persistante de fichiers, documents ou autres sources susceptibles d'évoluer entre deux exécutions, le bootstrap doit définir explicitement une stratégie de réconciliation des sources avant de générer l'architecture finale.
+
+Cette gestion ne doit pas être ajoutée systématiquement aux automatisations purement one-shot ou dont les entrées sont immuables par définition.
+
+## 18.1 Déterminer la politique de mutation
+
+Pour chaque collection de sources persistantes, déterminer si elle est :
+
+```text
+APPEND_ONLY
+MUTABLE
+REPLACEABLE
+DELETABLE
+```
+
+et préciser :
+
+```text
+Can new sources appear?
+Can existing sources be modified?
+Can existing sources disappear?
+Must modified/deleted sources invalidate derived data?
+Must source history be preserved?
+```
+
+Si une réponse est réellement nécessaire pour concevoir correctement l'automatisation et n'est pas déductible des artefacts existants, la traiter comme un gap de readiness et utiliser Grill Me si nécessaire.
+
+Ne pas demander ces précisions si elles ne changent pas la conception du POC.
+
+## 18.2 Registre persistant des sources
+
+Pour une collection mutable ou incrémentale, générer un registre persistant des sources.
+
+Préférer DuckDB ou un autre stockage structuré déjà résolu par la section Runtime capability resolution lorsque :
+
+- le nombre de sources peut croître ;
+- l'automatisation doit reprendre après interruption ;
+- des résultats dérivés doivent rester reliés à leurs sources ;
+- les changements doivent être détectés entre plusieurs runs.
+
+Le registre devrait contenir, lorsque pertinent :
+
+```text
+source_id
+relative_path
+file_name
+file_size
+modified_at
+content_hash
+status
+first_seen_at
+last_seen_at
+last_processed_at
+processing_version
+```
+
+`source_id` doit être stable autant que possible.
+
+`content_hash` doit être utilisé pour détecter une modification réelle de contenu.
+
+Ne pas se fier uniquement :
+
+- au nom de fichier ;
+- à la date de modification ;
+- à la taille du fichier.
+
+Ces métadonnées peuvent servir de préfiltre, mais le hash reste la preuve de changement de contenu lorsque cela est nécessaire.
+
+## 18.3 Réconciliation obligatoire au début du run
+
+Pour les automatisations concernées, le `TASK.md` et les skills générés doivent imposer une phase de source reconciliation avant le traitement métier.
+
+Comparer :
+
+```text
+sources actuellement présentes
+vs
+sources connues dans l'état persistant
+```
+
+Classifier chaque source :
+
+```text
+NEW
+MODIFIED
+UNCHANGED
+DELETED
+REPROCESS_REQUIRED
+```
+
+### NEW
+
+Source présente maintenant mais absente du registre.
+
+Action typique :
+
+```text
+register
+→ extract/parse
+→ process
+→ persist derived data
+→ mark processed
+```
+
+### UNCHANGED
+
+Même source et même `content_hash`, avec une `processing_version` encore valide.
+
+Action :
+
+```text
+skip expensive reprocessing
+```
+
+Ne pas retraiter inutilement une source inchangée.
+
+### MODIFIED
+
+Source connue mais `content_hash` différent.
+
+Action :
+
+```text
+preserve source history if required
+→ invalidate affected derived data
+→ reprocess source
+→ rebuild impacted results
+```
+
+Ne pas modifier ligne par ligne des résultats dérivés non fiables si une reconstruction déterministe de la portion impactée est plus sûre.
+
+### DELETED
+
+Source connue dans l'état persistant mais absente du corpus actuel.
+
+Ne pas supprimer immédiatement son historique.
+
+Préférer un tombstone :
+
+```text
+status = DELETED
+last_seen_at = <last known time>
+```
+
+Puis déterminer quelles données dérivées doivent :
+
+```text
+remain valid
+lose one source link
+be downgraded in confidence
+be invalidated
+be rebuilt
+```
+
+### REPROCESS_REQUIRED
+
+Le fichier n'a pas changé, mais la logique de traitement a évolué.
+
+Exemples :
+
+```text
+skill version changed
+extraction schema changed
+business rule changed
+processing_version changed
+```
+
+Action :
+
+```text
+reprocess even if content_hash is unchanged
+```
+
+## 18.4 Version de traitement
+
+Les résultats persistants qui dépendent d'une logique susceptible d'évoluer doivent conserver une version de traitement.
+
+Exemple :
+
+```text
+processing_version = obligation-register-v3
+```
+
+Règle recommandée :
+
+```text
+same content_hash
++ same processing_version
+→ UNCHANGED
+
+different content_hash
+→ MODIFIED
+
+same content_hash
++ different processing_version
+→ REPROCESS_REQUIRED
+```
+
+La `processing_version` doit refléter une version fonctionnelle significative, pas chaque modification triviale de fichier.
+
+## 18.5 Traçabilité des données dérivées
+
+Toute donnée dérivée importante doit rester reliée à ses sources lorsque la traçabilité métier l'exige.
+
+Exemple conceptuel :
+
+```text
+derived_record
+    │
+    └── derived_record_sources
+            ├── derived_record_id
+            ├── source_id
+            ├── source_locator
+            ├── source_hash
+            └── processing_version
+```
+
+Cette relation permet de recalculer uniquement la partie impactée lorsqu'une source change ou disparaît.
+
+## 18.6 Invalidation ciblée
+
+Lorsqu'une source est `MODIFIED`, `DELETED` ou `REPROCESS_REQUIRED` :
+
+1. identifier les résultats qui en dépendent ;
+2. invalider uniquement ce qui est impacté ;
+3. préserver les résultats indépendants ;
+4. recalculer les agrégats, conflits ou synthèses qui dépendent des données invalidées ;
+5. conserver la provenance de l'ancienne version si l'audit l'exige.
+
+Éviter deux extrêmes :
+
+```text
+retraiter tout le corpus à chaque run
+```
+
+et :
+
+```text
+ne jamais remettre en cause les anciennes données dérivées
+```
+
+## 18.7 Reprise après interruption
+
+La source reconciliation elle-même doit être reprenable si elle peut être longue.
+
+Pour chaque source, persister si utile :
+
+```text
+DISCOVERED
+REGISTERED
+PROCESSING
+PROCESSED
+FAILED
+INVALIDATED
+DELETED
+```
+
+Un redémarrage ne doit pas :
+
+- retraiter les sources déjà terminées sans raison ;
+- perdre le statut des fichiers supprimés ;
+- créer des doublons ;
+- oublier une invalidation déjà identifiée.
+
+## 18.8 Generated runtime contract
+
+Si la gestion de changements de sources est applicable, les artefacts générés doivent préciser explicitement cette capacité.
+
+### Dans AUTOMATION_SPEC.md
+
+Ajouter une section :
+
+```text
+Source lifecycle
+```
+
+décrivant au minimum :
+
+```text
+mutation policy
+source registry
+change detection
+content hash strategy
+processing version strategy
+derived-data invalidation
+deletion/tombstone policy
+resume behavior
+```
+
+### Dans TASK.md
+
+Ajouter une règle du type :
+
+```text
+Always reconcile the current input corpus against persistent source state
+before business processing.
+
+Do not assume that the source collection is identical to the previous run.
+Process only NEW, MODIFIED or REPROCESS_REQUIRED sources unless a full
+rebuild is explicitly required.
+
+Handle DELETED sources according to the configured invalidation policy.
+```
+
+### Dans les skills métier générés
+
+Décrire concrètement :
+
+- comment inventorier les sources ;
+- comment calculer ou obtenir le hash ;
+- quelle table/structure persiste l'état ;
+- comment détecter les suppressions ;
+- comment invalider les données dérivées ;
+- comment versionner le traitement ;
+- comment reprendre après interruption.
+
+Ne pas se contenter d'écrire :
+
+```text
+Support incremental updates.
+```
+
+Le comportement doit être exécutable.
+
+
+---
+
+# 19. Architecture minimale
 
 Préférer :
 
@@ -666,7 +1034,7 @@ Le bootstrap doit pouvoir justifier chaque agent supplémentaire.
 
 ---
 
-# 18. Génération local-first
+# 20. Génération local-first
 
 Tout nouveau composant commence localement.
 
@@ -711,7 +1079,7 @@ generated-automation/
 
 ---
 
-# 19. Données et état d'exécution
+# 21. Données et état d'exécution
 
 Pour un processus volumineux, multi-étapes ou reprenable :
 
@@ -726,7 +1094,7 @@ Ne pas utiliser un énorme fichier Markdown comme base de données d'exécution.
 
 ---
 
-# 20. Gros résultats
+# 22. Gros résultats
 
 Si les sorties sont volumineuses :
 
@@ -747,7 +1115,7 @@ Prévoir :
 
 ---
 
-# 21. Données synthétiques si réellement nécessaires
+# 23. Données synthétiques si réellement nécessaires
 
 Si aucun corpus utilisable n'existe, créer le minimum permettant de tester :
 
@@ -760,7 +1128,7 @@ La génération synthétique doit suivre les contraintes établies par R1-R10.
 
 ---
 
-# 22. AUTOMATION_SPEC.md
+# 24. AUTOMATION_SPEC.md
 
 Générer une spécification concise contenant :
 
@@ -776,6 +1144,8 @@ Outputs
 Human-in-the-loop
 Forbidden actions
 Technical constraints
+Runtime dependencies
+Source lifecycle
 Persistence strategy
 Acceptance criteria
 Test strategy
@@ -789,7 +1159,7 @@ Ne pas recopier tout l'historique Grill Me.
 
 ---
 
-# 23. TASK.md
+# 25. TASK.md
 
 `TASK.md` est la mission d'exécution de l'agent métier.
 
@@ -808,7 +1178,7 @@ Il doit préciser :
 
 ---
 
-# 24. BOOTSTRAP_TASK.md
+# 26. BOOTSTRAP_TASK.md
 
 `BOOTSTRAP_TASK.md` reste distinct de `TASK.md`.
 
@@ -830,7 +1200,7 @@ Do not execute the business mission itself yet.
 
 ---
 
-# 25. Classification après génération
+# 27. Classification après génération
 
 Classer chaque nouveau composant :
 
@@ -876,7 +1246,7 @@ PLATFORM_ROOT\.agents\skills\<skill-name>\
 
 ---
 
-# 26. Promotion
+# 28. Promotion
 
 Créer ou mettre à jour :
 
@@ -899,7 +1269,7 @@ Ne jamais déplacer automatiquement un composant.
 
 ---
 
-# 27. Vérification avant promotion
+# 29. Vérification avant promotion
 
 Avant toute promotion :
 
@@ -921,7 +1291,7 @@ quand l'expérience le justifie.
 
 ---
 
-# 28. Portabilité entre harness
+# 30. Portabilité entre harness
 
 Pour les skills partageables :
 
@@ -932,7 +1302,7 @@ Pour les skills partageables :
 
 ## Exception assumée : phase d'interview
 
-Cette V2 utilise Grill Me comme adapter d'entretien lorsqu'elle s'exécute sous Pi.
+Cette V3 utilise Grill Me comme adapter d'entretien lorsqu'elle s'exécute sous Pi.
 
 La logique métier R1-R10, la reprise, la génération et la promotion restent portables.
 
@@ -946,7 +1316,7 @@ Ne pas copier le comportement interne de Grill Me dans le skill portable.
 
 ---
 
-# 29. README généré
+# 31. README généré
 
 Le README de l'automatisation doit expliquer :
 
@@ -969,7 +1339,7 @@ Les détails d'entretien restent dans les artefacts Grill Me.
 
 ---
 
-# 30. Vérification finale
+# 32. Vérification finale
 
 Avant de terminer :
 
@@ -982,7 +1352,8 @@ Avant de terminer :
 7. vérifier que la reprise après interruption est prévue ;
 8. vérifier que le README permet de lancer le POC ;
 9. vérifier que les composants inutiles ont été supprimés ;
-10. ne pas lancer la mission métier si le bootstrap devait seulement la générer.
+10. vérifier que la stratégie de cycle de vie des sources est définie si les entrées peuvent évoluer entre deux runs ;
+11. ne pas lancer la mission métier si le bootstrap devait seulement la générer.
 
 Puis écrire :
 
@@ -1001,7 +1372,7 @@ Si oui, simplifier.
 
 ---
 
-# 31. Résumé du cycle V2
+# 33. Résumé du cycle V3
 
 ```text
 PROCESS_AUTOMATION.md + AGENTS + existing artifacts
@@ -1045,6 +1416,12 @@ PROCESS_AUTOMATION.md + AGENTS + existing artifacts
                         inspect/reuse existing data
                                     │
                                     ▼
+                     resolve runtime capabilities
+                                    │
+                                    ▼
+                   define source lifecycle if applicable
+                                    │
+                                    ▼
                           minimal local-first POC
                                     │
                                     ▼
@@ -1061,5 +1438,5 @@ Principe clé :
 
 ```text
 Grill Me = HOW to interview
-Bootstrap = WHAT must be known + WHAT to generate + WHEN to resume
+Bootstrap = WHAT must be known + WHAT to generate + WHEN to resume + HOW sources evolve
 ```

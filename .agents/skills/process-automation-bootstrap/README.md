@@ -1,58 +1,58 @@
-# process-automation-bootstrap V2
+# process-automation-bootstrap V3
 
-Version complète avec orchestration Grill Me et reprise.
+Version complète du bootstrap d'automatisation.
 
-## Principes
+## V3 ajoute
 
-`@firstpick/pi-extension-grill-me` possède la mécanique d'entretien.
+La V3 conserve intégralement les comportements de la V2 et ajoute la gestion générique du cycle de vie des sources entre exécutions :
 
-`process-automation-bootstrap` possède :
+- NEW
+- MODIFIED
+- UNCHANGED
+- DELETED
+- REPROCESS_REQUIRED
+- content hash
+- processing version
+- tombstones
+- invalidation ciblée des données dérivées
+- reprise après interruption
 
-- readiness R1-R10 ;
-- Definition of Ready ;
-- existing-data-first ;
-- génération local-first ;
-- evaluator ;
-- reprise automatique ;
-- garde-fou de reprise ;
-- promotion LOCAL / DOMAIN / COMMON.
+Cette logique n'est activée que pour les automatisations dont les entrées peuvent évoluer entre plusieurs runs.
+
+## Grill Me
+
+La V3 conserve la délégation de l'entretien à :
+
+`@firstpick/pi-extension-grill-me`
+
+avec :
+
+- persistance de l'état de reprise avant l'entretien ;
+- contrat de continuation automatique ;
+- garde-fou demandant explicitement `Poursuis le bootstrap.` si la reprise automatique échoue.
+
+## Runtime capabilities
+
+La V3 conserve aussi la résolution explicite des capacités runtime avant génération :
+
+besoin logique → skill commun/domaine → extension/provider réellement disponible → outils exacts → politique offline/install.
 
 ## Installation
 
-Remplacer :
+Remplacer le dossier commun existant par :
 
 ```text
 G:\pi-workspace\.agents\skills\process-automation-bootstrap\
 ```
 
-par le contenu de ce package.
-
-L'extension Grill Me reste installée séparément.
-
-## Reprise après entretien
-
-Avant Grill Me, le bootstrap persiste :
+Le fichier attendu est :
 
 ```text
-BOOTSTRAP_PHASE: INTERVIEW
-RESUME_AFTER_INTERVIEW: true
-NEXT_ACTION: REASSESS_READINESS_AND_GENERATE
+G:\pi-workspace\.agents\skills\process-automation-bootstrap\SKILL.md
 ```
 
-La commande `/grill-me` proposée doit inclure un contrat demandant la reprise automatique.
+## Pas de fichier de migration
 
-Si cette reprise automatique ne se produit pas alors que l'entretien est fini, le skill demande explicitement à l'utilisateur :
+Ce package ne contient volontairement aucun fichier `MIGRATION-*.md`.
 
-```text
-Poursuis le bootstrap.
-```
-
-Ce message est un garde-fou et non le workflow nominal.
-
-## Fin du bootstrap
-
-Un bootstrap n'est terminé que lorsque :
-
-```text
-BOOTSTRAP_PHASE: COMPLETE
-```
+La V3 est destinée aux nouveaux bootstraps. Elle ne cherche pas à migrer ou réécrire automatiquement les automatisations générées par des versions précédentes.
