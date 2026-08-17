@@ -86,6 +86,28 @@ While working inside an automation workspace:
 
 ---
 
+## Pi runtime configuration boundary
+
+Do not inspect, search, read, modify, or enumerate the Pi user configuration directory:
+
+`~/.pi/agent/`
+or
+`Users/xxx/.pi/`
+
+unless the user explicitly requests a Pi administration or debugging task.
+
+All reusable platform skills required by automation workspaces must be discovered from:
+
+- `pi-workspace/.agents/skills/`
+- the current domain `.agents/skills/`
+- the current workspace `.agents/skills/`
+
+Do not search `~/.pi` to discover skills, bootstrap files, agents, prompts, or automation resources.
+
+Assume already-loaded Pi extensions and globally configured runtime resources are available through Pi without inspecting their installation directories.
+
+---
+
 ## Workspace boundaries
 
 Operate primarily inside the current automation workspace.
