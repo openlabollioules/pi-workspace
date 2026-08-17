@@ -421,6 +421,10 @@ Interfaces, conventions, skill boundaries, and runtime adapters may evolve as mo
 
 # Pi configuration
 
+## Install Git Bash
+
+A bash is used by Pi. Download and install Git Bash on windows.
+
 ## Extensions we've installed
 
 With pi install :
@@ -432,6 +436,7 @@ With pi install :
 - npm:@gotgenes/pi-permission-system
 - npm:pi-file-permissions
 - npm:@firstpick/pi-extension-grill-me
+- npm:@siva-sub/pi-docparser
 
 ## settings.json
 
@@ -453,7 +458,8 @@ Under ~/.pi/agent
     "npm:pi-subagents",
     "npm:@gotgenes/pi-permission-system",
     "npm:pi-file-permissions",
-    "npm:@firstpick/pi-extension-grill-me"
+    "npm:@firstpick/pi-extension-grill-me",
+    "npm:@siva-sub/pi-docparser"
   ],
 "skills": [
     "G:\\pi-workspace\\.agents\\skills"
