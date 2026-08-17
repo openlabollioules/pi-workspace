@@ -458,4 +458,67 @@ Under ~/.pi/agent
 "skills": [
     "G:\\pi-workspace\\.agents\\skills"
   ]
-}```
+}
+```
+
+## Permissions
+
+Content of our .pi\agent\extensions\pi-permission-system\config.json :
+
+```
+{
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/main/packages/pi-permission-system/schemas/permissions.schema.json",
+
+  "debugLog": true,
+  "permissionReviewLog": true,
+  "yoloMode": false,
+
+  "toolInputPreviewMaxLength": 400,
+  "toolTextSummaryMaxLength": 120,
+
+  "piInfrastructureReadPaths": [
+    "G:/pi-workspace",
+    "C:/Users/xxx/AppData/Roaming/pi-desktop/tmp"
+  ],
+
+  "permission": {
+    "*": "allow",
+
+    "read": "allow",
+    "write": "allow",
+    "edit": "allow",
+    "grep": "allow",
+    "find": "allow",
+    "ls": "allow",
+
+    "path": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+
+    "external_directory": {
+      "*": "ask",
+
+      "G:/pi-workspace": "allow",
+      "G:/pi-workspace/*": "allow",
+      "G:/pi-workspace/**": "allow",
+
+      "C:/Users/xxx/AppData/Roaming/pi-desktop/tmp": "allow",
+      "C:/Users/xxx/AppData/Roaming/pi-desktop/tmp/*": "allow",
+      "C:/Users/xxx/AppData/Roaming/pi-desktop/tmp/**": "allow"
+    },
+
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny",
+      "sudo *": "ask"
+    },
+
+    "skill": {
+      "*": "allow"
+    }
+  }
+}
+```

@@ -218,3 +218,16 @@ one primary agent
 unless multiple agents provide a clear benefit such as isolation, permissions, context separation, or useful parallelism.
 
 Do not add agents, skills, databases, or infrastructure solely for architectural sophistication.
+
+
+## Temporary files
+
+Do not use `/tmp`, `%TEMP%`, or other system-wide temporary directories for agent-created intermediate files.
+
+Use only:
+
+`workspace/.tmp/`
+
+for temporary extraction, conversion, unpacking, and intermediate processing.
+
+Create subdirectories under `workspace/.tmp/` as needed and clean them up when safe.
