@@ -1,62 +1,141 @@
 ---
 name: process-automation-bootstrap
-description: Interviewe un expert métier ou analyse PROCESS_AUTOMATION.md afin de définir une automatisation agentique prête à tester. Génère d'abord agents et skills localement dans le workspace courant, puis évalue quels composants pourraient être promus au niveau domaine ou commun sans les déplacer automatiquement.
+description: Transforme une description de processus métier en automatisation agentique minimale prête à tester. S'appuie sur @firstpick/pi-extension-grill-me pour l'entretien déterministe et la persistance des décisions, puis ajoute la readiness métier R1-R10, l'inspection existing-data-first, la génération local-first, l'evaluator, la reprise automatique après entretien et la classification de promotion.
 ---
 
-# Process Automation Bootstrap — MVP local-first
+# Process Automation Bootstrap — V2
 
 ## Mission
 
-Transformer une description métier incomplète en une automatisation agentique minimale, testable et documentée.
+Transformer une description métier, éventuellement incomplète, en une automatisation agentique minimale, testable, traçable, reprenable et documentée.
 
-Le bootstrap suit quatre principes :
+Cette V2 **ne réimplémente pas le moteur d'entretien interactif**.
 
-1. **local-first** : tout nouveau composant est créé dans le workspace courant ;
-2. **test-before-promote** : aucun skill n'est placé directement dans un catalogue partagé ;
-3. **promotion explicite** : après génération, proposer ce qui pourrait devenir domaine ou commun ;
-4. **no automatic promotion** : ne jamais déplacer un composant hors du workspace sans demande explicite de l'utilisateur.
+Lorsqu'une clarification humaine est nécessaire, elle délègue à :
+
+```text
+@firstpick/pi-extension-grill-me
+```
+
+et à ses mécanismes natifs.
+
+Le bootstrap ajoute uniquement ce qui est spécifique à la conception et à la génération d'une automatisation métier :
+
+- lecture de `PROCESS_AUTOMATION.md` et des artefacts disponibles ;
+- readiness R1 à R10 ;
+- détection des lacunes réellement bloquantes ;
+- inspection des données existantes avant toute génération synthétique ;
+- Definition of Ready déterministe ;
+- orchestration de l'entretien Grill Me lorsque nécessaire ;
+- reprise automatique demandée après l'entretien ;
+- garde-fou si la reprise automatique ne se produit pas ;
+- architecture minimale ;
+- génération local-first ;
+- réutilisation des skills existants ;
+- état persistant ;
+- test data et evaluator si nécessaires ;
+- classification LOCAL / DOMAIN_CANDIDATE / COMMON_CANDIDATE ;
+- documentation et vérification finale.
 
 ---
 
-# 1. Convention d'arborescence
+# 1. Répartition des responsabilités
 
-La plateforme d'automatisation est un dépôt ou répertoire de travail séparé de la configuration globale de Pi.
+## Grill Me possède
 
-Dans l'environnement de référence :
+Ne pas réimplémenter dans ce skill :
+
+- le principe « une question à la fois » ;
+- l'enregistrement structuré de chaque question ;
+- la recommandation proposée par l'assistant ;
+- la réponse explicite de l'utilisateur ;
+- le statut résolu / non résolu ;
+- les notes d'entretien ;
+- la persistance de la session d'entretien ;
+- la génération du résumé d'entretien.
+
+Ces fonctions appartiennent à Grill Me.
+
+## Le bootstrap possède
+
+Le bootstrap reste responsable de :
+
+```text
+PROCESS_AUTOMATION.md
+BOOTSTRAP_TASK.md
+.bootstrap/READINESS.md
+.bootstrap/ASSUMPTIONS.md
+.bootstrap/OPEN_QUESTIONS.md
+.bootstrap/PROMOTION_CANDIDATES.md
+AUTOMATION_SPEC.md
+AGENTS.md
+TASK.md
+README.md
+.agents/skills/*
+agents/*
+workspace/*
+test-data/*
+evaluator/*
+```
+
+Il traduit les informations connues et les décisions Grill Me en readiness R1-R10 et poursuit jusqu'à la fin du bootstrap.
+
+---
+
+# 2. Précondition Grill Me
+
+Cette V2 suppose que l'extension suivante est installée dans Pi :
+
+```text
+@firstpick/pi-extension-grill-me
+```
+
+Si une interview est nécessaire et qu'aucune session Grill Me n'est active, ne simule pas Grill Me avec une interview maison.
+
+Le bootstrap doit préparer une commande `/grill-me` ciblée sur les dimensions de readiness encore insuffisantes.
+
+Exemple conceptuel :
+
+```text
+/grill-me Compléter la définition de l'automatisation décrite dans
+PROCESS_AUTOMATION.md jusqu'à satisfaire uniquement les dimensions R1-R10
+encore PARTIAL ou UNKNOWN. Ne pas redemander les informations déjà établies.
+À la fin de l'entretien, sauvegarder les résultats, réévaluer R1-R10 et
+reprendre immédiatement le bootstrap sans attendre une nouvelle instruction
+de l'utilisateur.
+```
+
+Une fois Grill Me actif, utiliser ses mécanismes natifs pour toute clarification.
+
+Ne pas dupliquer l'historique détaillé de Grill Me dans un journal parallèle.
+
+---
+
+# 3. Convention d'arborescence
+
+Structure de référence :
 
 ```text
 G:\pi-workspace\
-```
-
-est la racine de la plateforme.
-
-La configuration globale de Pi reste dans son emplacement par défaut :
-
-```text
-~/.pi/agent/
-```
-
-Ne pas confondre ces deux emplacements.
-
-La convention cible est :
-
-```text
-G:\pi-workspace\
+├── AGENTS.md
 ├── .agents\
-│   └── skills\                         # skills communs à tous les domaines
+│   └── skills\                         # COMMON
 │
 └── domains\
     ├── contract-management\
-    │   ├── AGENTS.md                   # règles partagées du domaine, si utile
+    │   ├── AGENTS.md
     │   ├── .agents\
-    │   │   └── skills\                 # skills partagés Contract Management
+    │   │   └── skills\                 # DOMAIN
     │   │
     │   ├── obligations\                # automation/workspace
     │   │   ├── PROCESS_AUTOMATION.md
+    │   │   ├── BOOTSTRAP_TASK.md
+    │   │   ├── AUTOMATION_SPEC.md
     │   │   ├── AGENTS.md
     │   │   ├── TASK.md
+    │   │   ├── README.md
     │   │   ├── .agents\
-    │   │   │   └── skills\             # skills locaux en incubation
+    │   │   │   └── skills\             # LOCAL
     │   │   ├── agents\
     │   │   ├── workspace\
     │   │   ├── test-data\
@@ -67,27 +146,24 @@ G:\pi-workspace\
     │   └── correspondence\
     │
     ├── quality\
-    │   ├── .agents\
-    │   │   └── skills\
-    │   ├── non-conformities\
-    │   └── audits\
-    │
     └── ivvq\
-        ├── .agents\
-        │   └── skills\
-        ├── test-analysis\
-        └── requirements-coverage\
 ```
 
-Il n'est pas nécessaire d'ajouter un niveau intermédiaire `automations/`.
+Ne pas créer de niveau intermédiaire `automations/`.
 
-Chaque sous-répertoire fonctionnel du domaine peut être directement un workspace d'automatisation.
+La configuration globale de Pi :
+
+```text
+~/.pi/agent/
+```
+
+n'est pas une source à explorer pour découvrir les artefacts métier ou les skills de la plateforme.
 
 ---
 
-# 2. Détermination du contexte
+# 4. Détermination du contexte
 
-Au démarrage, identifier :
+Identifier au démarrage :
 
 ```text
 CURRENT_WORKSPACE
@@ -95,13 +171,7 @@ DOMAIN_DIR
 PLATFORM_ROOT
 ```
 
-Dans la structure conventionnelle :
-
-```text
-G:\pi-workspace\domains\contract-management\obligations
-```
-
-on a :
+Exemple :
 
 ```text
 CURRENT_WORKSPACE = G:\pi-workspace\domains\contract-management\obligations
@@ -109,62 +179,125 @@ DOMAIN_DIR        = G:\pi-workspace\domains\contract-management
 PLATFORM_ROOT     = G:\pi-workspace
 ```
 
-Ne pas dépendre aveuglément d'un nombre fixe de `../`.
+Ne pas dépendre d'un nombre fixe de `../`.
 
-Pour identifier ces niveaux :
+Chercher la racine de plateforme à partir de la structure `domains/` et des répertoires `.agents/skills/`.
 
-1. partir du workspace courant ;
-2. rechercher le parent correspondant au domaine ;
-3. rechercher un ancêtre contenant `domains/` et éventuellement `.agents/skills/` ;
-4. considérer cet ancêtre comme racine de plateforme ;
-5. si la structure est ambiguë, conserver tous les composants localement et ne demander le chemin de promotion que lorsqu'une promotion est réellement souhaitée.
+Si la structure est ambiguë :
+
+- garder toute nouvelle création localement ;
+- ne demander une précision de chemin que si elle devient réellement nécessaire.
 
 ---
 
-# 3. Entrées
+# 5. Entrées
 
-Chercher en priorité à la racine du workspace courant :
+Chercher en priorité :
 
 ```text
 PROCESS_AUTOMATION.md
+BOOTSTRAP_TASK.md
+AGENTS.md hérités
+workspace/
+workspace/input/
+workspace/contract/
+test-data/
+evaluator/
 ```
 
-S'il existe :
+Lire intégralement `PROCESS_AUTOMATION.md` s'il existe.
 
-- le lire intégralement ;
-- exploiter les informations déjà présentes ;
-- ne pas redemander une information suffisamment explicite ;
-- relever contradictions, ambiguïtés et informations manquantes.
+Ne pas redemander une information déjà suffisamment définie dans :
 
-S'il n'existe pas :
-
-- démarrer l'interview ;
-- créer progressivement `PROCESS_AUTOMATION.md`.
+- `PROCESS_AUTOMATION.md` ;
+- les `AGENTS.md` hérités ;
+- les fichiers présents ;
+- les résultats Grill Me déjà persistés ;
+- `.bootstrap/READINESS.md`.
 
 Ne pas inventer le fonctionnement métier à partir de connaissances externes.
 
 ---
 
-# 4. État persistant du bootstrap
+# 6. État persistant
 
 Créer :
 
 ```text
 .bootstrap/
 ├── READINESS.md
-├── DECISIONS.md
 ├── ASSUMPTIONS.md
 ├── OPEN_QUESTIONS.md
 └── PROMOTION_CANDIDATES.md
 ```
 
-Ces fichiers doivent permettre de reprendre une session interrompue.
+Ne pas créer `.bootstrap/DECISIONS.md` par défaut.
+
+Les décisions interactives sont déjà enregistrées par Grill Me.
+
+## READINESS.md
+
+`READINESS.md` est la vue canonique de l'état du bootstrap.
+
+Il doit contenir deux parties :
+
+### A. Readiness métier
+
+R1 à R10.
+
+### B. État d'exécution du bootstrap
+
+Utiliser exactement ces champs :
+
+```text
+BOOTSTRAP_PHASE: ASSESSMENT | INTERVIEW | GENERATION | VALIDATION | COMPLETE
+RESUME_AFTER_INTERVIEW: true | false
+NEXT_ACTION: <action explicite>
+AUTOMATION_READY: YES | NO
+```
+
+Exemple avant Grill Me :
+
+```text
+BOOTSTRAP_PHASE: INTERVIEW
+RESUME_AFTER_INTERVIEW: true
+NEXT_ACTION: REASSESS_READINESS_AND_GENERATE
+AUTOMATION_READY: NO
+```
+
+Exemple pendant génération :
+
+```text
+BOOTSTRAP_PHASE: GENERATION
+RESUME_AFTER_INTERVIEW: false
+NEXT_ACTION: GENERATE_MINIMAL_POC
+AUTOMATION_READY: YES
+```
+
+Exemple final :
+
+```text
+BOOTSTRAP_PHASE: COMPLETE
+RESUME_AFTER_INTERVIEW: false
+NEXT_ACTION: NONE
+AUTOMATION_READY: YES
+```
+
+## ASSUMPTIONS.md
+
+Contient uniquement les hypothèses du bootstrap qui ne sont pas des décisions humaines explicites.
+
+## OPEN_QUESTIONS.md
+
+Contient uniquement les lacunes encore ouvertes, avec référence vers la dimension R concernée.
+
+Ne pas recopier l'historique détaillé de Grill Me.
 
 ---
 
-# 5. Readiness MVP
+# 7. Readiness métier R1-R10
 
-Évaluer ces 10 dimensions :
+Évaluer :
 
 | ID | Dimension |
 |---|---|
@@ -179,7 +312,7 @@ Ces fichiers doivent permettre de reprendre une session interrompue.
 | R9 | Contraintes techniques, permissions et données |
 | R10 | Critères d'acceptation et scénario de test |
 
-Statuts autorisés :
+Statuts :
 
 ```text
 UNKNOWN
@@ -188,216 +321,223 @@ CONFIRMED
 N/A
 ```
 
-La génération commence uniquement lorsque R1 à R10 sont `CONFIRMED` ou `N/A` et qu'aucune contradiction bloquante n'est ouverte.
-
----
-
-# 6. Interview
-
-## Une question à la fois
-
-Ne jamais envoyer un questionnaire massif.
-
-Choisir la question qui réduit le plus l'incertitude bloquante.
-
-## Ne pas redemander ce qui est connu
-
-Avant chaque question, vérifier :
-
-- `PROCESS_AUTOMATION.md` ;
-- les fichiers fournis ;
-- `.bootstrap/DECISIONS.md` ;
-- les réponses précédentes.
-
-## Chercher activement les exceptions
-
-Vérifier notamment :
-
-- que faire si une entrée manque ;
-- quel cas sort du processus nominal ;
-- que faire si deux sources se contredisent ;
-- que faire si une étape échoue après qu'une partie du travail a déjà été persistée.
-
----
-
-# 7. Gate de génération
-
-Lorsque R1 à R10 sont prêts :
-
-1. résumer l'automatisation ;
-2. enregistrer `AUTOMATION_READY` dans `.bootstrap/DECISIONS.md` ;
-3. concevoir l'architecture minimale ;
-4. générer immédiatement les composants dans le workspace courant.
-
-Ne pas demander de confirmation supplémentaire si l'utilisateur a déjà demandé la génération dès que le système est prêt.
-
----
-
-# 8. Architecture minimale
-
-Toujours préférer :
+Pour chaque dimension, `READINESS.md` doit contenir :
 
 ```text
-1 agent principal
-+ quelques skills spécialisés
-+ outils existants
-+ état persistant si nécessaire
+Status
+Evidence
+Blocking gap
+Source
 ```
 
-Ne créer plusieurs agents que si une raison claire existe :
-
-- permissions différentes ;
-- contexte réellement différent ;
-- expertise spécialisée ;
-- isolation de risque ;
-- parallélisation utile.
-
-Le nombre d'agents doit rester minimal.
-
----
-
-# 9. Génération local-first
-
-## 9.1 Agent principal
-
-Créer au niveau du workspace courant :
+Sources possibles :
 
 ```text
+PROCESS_AUTOMATION.md
 AGENTS.md
-TASK.md
+existing file/data
+Grill Me decision
+user instruction
 ```
 
-`AGENTS.md` contient les règles de comportement de l'agent principal.
-
-`TASK.md` contient une mission directement exécutable.
-
-## 9.2 Skills locaux de l'automatisation
-
-Tous les nouveaux skills doivent être créés initialement dans :
-
-```text
-CURRENT_WORKSPACE\.agents\skills\<skill-name>\SKILL.md
-```
-
-Exemple :
-
-```text
-G:\pi-workspace\domains\contract-management\obligations\
-└── .agents\
-    └── skills\
-        └── contract-obligation-register\
-            └── SKILL.md
-```
-
-Ne pas créer un nouveau skill directement au niveau domaine ou commun.
-
-Ne pas utiliser `.pi/skills/` pour un skill portable, sauf nécessité explicite liée à Pi.
-
-Le contenu d'un skill métier doit autant que possible rester indépendant du harness.
-
-## 9.3 Agents supplémentaires
-
-Si plusieurs agents sont réellement nécessaires, créer leurs spécifications dans :
-
-```text
-agents\<agent-name>\AGENTS.md
-```
-
-Ces fichiers sont des spécifications locales d'agents.
-
-Toute adaptation spécifique à Pi, Hermes ou un autre runtime doit rester séparée de la logique métier portable.
+Ne pas marquer `CONFIRMED` une dimension reposant uniquement sur une supposition non validée.
 
 ---
 
-# 10. Arborescence minimale générée
+# 8. Analyse avant interview
 
-Le bootstrap doit viser :
+Avant de déclencher Grill Me :
+
+1. lire les descriptions disponibles ;
+2. inspecter les artefacts utiles ;
+3. inventorier les données présentes ;
+4. remplir R1-R10 avec les informations déjà établies ;
+5. identifier uniquement les lacunes réellement bloquantes.
+
+Si R1-R10 sont déjà `CONFIRMED` ou `N/A`, **ne pas lancer Grill Me inutilement**.
+
+Passer directement au gate de génération.
+
+---
+
+# 9. Utilisation de Grill Me
+
+Lorsque des dimensions restent `UNKNOWN` ou `PARTIAL` et empêchent la génération :
+
+1. produire la liste des gaps ;
+2. classer les gaps par impact ;
+3. persister l'état de reprise dans `READINESS.md` ;
+4. construire une seule commande `/grill-me` ciblée ;
+5. demander à l'utilisateur de lancer cette commande ;
+6. laisser Grill Me gérer l'entretien ;
+7. lorsque l'entretien est terminé, reprendre automatiquement le bootstrap ;
+8. mettre à jour `READINESS.md` ;
+9. réévaluer R1-R10 ;
+10. continuer jusqu'à `COMPLETE`.
+
+## État obligatoire avant bascule vers Grill Me
+
+Avant d'afficher la commande `/grill-me`, écrire :
 
 ```text
-CURRENT_WORKSPACE\
-├── PROCESS_AUTOMATION.md
-├── AUTOMATION_SPEC.md
-├── README.md
-├── AGENTS.md
-├── TASK.md
-│
-├── .agents\
-│   └── skills\
-│       └── <local-skill>\
-│           └── SKILL.md
-│
-├── agents\
-│   └── <optional-agent>\
-│       └── AGENTS.md
-│
-├── workspace\
-│   ├── input\
-│   ├── data\
-│   └── output\
-│
-├── test-data\
-├── evaluator\
-│   ├── ground-truth.md
-│   └── scoring-rubric.md
-│
-└── .bootstrap\
-    ├── READINESS.md
-    ├── DECISIONS.md
-    ├── ASSUMPTIONS.md
-    ├── OPEN_QUESTIONS.md
-    └── PROMOTION_CANDIDATES.md
+BOOTSTRAP_PHASE: INTERVIEW
+RESUME_AFTER_INTERVIEW: true
+NEXT_ACTION: REASSESS_READINESS_AND_GENERATE
+AUTOMATION_READY: NO
 ```
-
-Ne pas créer un niveau `generated-automation/`.
-
-Le workspace courant est directement le projet d'automatisation généré.
 
 ---
 
-# 11. Réutilisation avant création
+# 10. Contrat de continuation automatique Grill Me
 
-Avant de créer un nouveau skill local :
+Toute commande `/grill-me` proposée par le bootstrap DOIT inclure explicitement un contrat de continuation.
 
-1. rechercher les skills déjà visibles dans le workspace ;
-2. rechercher les skills du domaine ;
-3. rechercher les skills communs ;
-4. comparer leur finalité avec le besoin ;
-5. préférer la réutilisation d'un skill existant lorsqu'il couvre le besoin ;
-6. ne créer un nouveau skill local que si aucune capacité existante ne convient suffisamment.
-
-Dans la structure de référence, vérifier notamment :
+Le texte peut être adapté au contexte, mais doit imposer les comportements suivants :
 
 ```text
-CURRENT_WORKSPACE\.agents\skills\
-DOMAIN_DIR\.agents\skills\
-PLATFORM_ROOT\.agents\skills\
+Lorsque toutes les décisions bloquantes de l'entretien sont résolues :
+
+1. sauvegarder/finaliser les résultats Grill Me avec son mécanisme natif ;
+2. considérer que la session Grill Me n'est qu'une étape du
+   process-automation-bootstrap en cours ;
+3. relire `.bootstrap/READINESS.md` ;
+4. réévaluer R1-R10 avec les décisions obtenues ;
+5. mettre à jour les statuts de readiness ;
+6. si la Definition of Ready est satisfaite, poursuivre immédiatement
+   la génération du POC ;
+7. ne pas attendre que l'utilisateur dise "continue", "resume",
+   "poursuis le bootstrap" ou équivalent ;
+8. poursuivre jusqu'à ce que BOOTSTRAP_PHASE soit COMPLETE ou qu'un
+   nouveau blocage nécessitant réellement l'utilisateur soit identifié.
 ```
 
-Ne jamais modifier directement un skill partagé sans demande explicite.
+Le bootstrap ne doit donc pas considérer la fin de l'entretien comme la fin de sa mission.
 
 ---
 
-# 12. Données et état persistants
+# 11. Garde-fou de reprise après Grill Me
 
-Si le processus est volumineux, multi-étapes ou doit reprendre après interruption, préférer DuckDB ou un autre stockage structuré local.
+Le contrat de continuation automatique peut ne pas être exécuté parfaitement par le modèle ou le harness.
 
-Le POC doit alors :
+Il faut donc un garde-fou supplémentaire.
 
-- définir les tables nécessaires ;
-- persister les progrès ;
-- traiter les résultats par lots ;
-- éviter les gros fichiers intermédiaires ;
-- générer les rapports depuis l'état persistant.
+## Règle
+
+Si, après l'entretien :
+
+```text
+BOOTSTRAP_PHASE: INTERVIEW
+RESUME_AFTER_INTERVIEW: true
+```
+
+est toujours présent et que l'entretien Grill Me est terminé ou ne nécessite plus de réponse utilisateur, le système doit afficher explicitement un message de garde-fou.
+
+Message recommandé :
+
+```text
+L'entretien Grill Me est terminé, mais le bootstrap n'a pas encore repris.
+
+Demande explicitement :
+"Poursuis le bootstrap."
+
+Le bootstrap doit alors relire `.bootstrap/READINESS.md`, réévaluer R1-R10
+et reprendre à partir de NEXT_ACTION.
+```
+
+Le message peut être formulé dans la langue de l'utilisateur.
+
+## Quand afficher ce garde-fou
+
+Afficher ce message uniquement si les trois conditions sont vraies :
+
+```text
+1. BOOTSTRAP_PHASE = INTERVIEW
+2. RESUME_AFTER_INTERVIEW = true
+3. Grill Me n'attend plus de réponse utilisateur
+```
+
+Ne pas afficher le garde-fou pendant qu'une question Grill Me attend encore une réponse.
+
+Ne pas l'afficher si le bootstrap a déjà repris.
 
 ---
 
-# 13. Données de test existantes : priorité absolue
+# 12. Détection d'un bootstrap interrompu
 
-Avant de générer la moindre donnée synthétique, le bootstrap doit inspecter le workspace courant et `PROCESS_AUTOMATION.md` afin de déterminer si les données de test nécessaires existent déjà.
+À chaque nouveau tour lié à cette automatisation, vérifier `READINESS.md`.
 
-## 13.1 Recherche des données existantes
+Si :
 
-Vérifier notamment :
+```text
+BOOTSTRAP_PHASE != COMPLETE
+```
+
+alors le bootstrap doit traiter la mission comme **reprenable**.
+
+Règles :
+
+### Si phase = ASSESSMENT
+
+Continuer l'évaluation R1-R10.
+
+### Si phase = INTERVIEW
+
+- vérifier si Grill Me attend encore une réponse ;
+- si oui, continuer l'entretien ;
+- si non et `RESUME_AFTER_INTERVIEW = true`, reprendre le bootstrap ;
+- si la reprise ne s'est toujours pas produite, afficher le garde-fou.
+
+### Si phase = GENERATION
+
+Reprendre la génération à partir de `NEXT_ACTION`.
+
+### Si phase = VALIDATION
+
+Reprendre les vérifications finales.
+
+### Si phase = COMPLETE
+
+Ne rien régénérer inutilement.
+
+---
+
+# 13. Definition of Ready / gate
+
+La génération peut commencer uniquement si :
+
+```text
+R1..R10 = CONFIRMED ou N/A
+```
+
+et si :
+
+```text
+aucune contradiction bloquante ouverte
+aucune entrée obligatoire non résolue sans stratégie
+aucune action interdite ambiguë
+un scénario de test existe ou est N/A de façon justifiée
+```
+
+Quand le gate est atteint :
+
+1. mettre à jour :
+
+```text
+AUTOMATION_READY: YES
+BOOTSTRAP_PHASE: GENERATION
+RESUME_AFTER_INTERVIEW: false
+NEXT_ACTION: GENERATE_MINIMAL_POC
+```
+
+2. si une session Grill Me vient de se terminer, finaliser ses résultats ;
+3. ne pas demander une seconde confirmation si l'utilisateur a déjà demandé de générer dès que prêt ;
+4. poursuivre immédiatement.
+
+---
+
+# 14. Existing-data-first
+
+Avant toute génération de données synthétiques, inspecter au minimum :
 
 ```text
 CURRENT_WORKSPACE\workspace\
@@ -406,9 +546,9 @@ CURRENT_WORKSPACE\workspace\contract\
 CURRENT_WORKSPACE\test-data\
 ```
 
-ainsi que tout emplacement explicitement déclaré dans `PROCESS_AUTOMATION.md`.
+et tout chemin déclaré dans `PROCESS_AUTOMATION.md`.
 
-Pour chaque entrée requise par le processus, déterminer :
+Pour chaque entrée requise :
 
 ```text
 PRESENT
@@ -416,173 +556,283 @@ MISSING
 OPTIONAL
 ```
 
-## 13.2 Règle de priorité
-
-Les données existantes ont toujours priorité sur la génération synthétique.
-
-Si toutes les entrées nécessaires sont présentes :
-
-- les réutiliser telles quelles ;
-- ne pas générer de nouveau corpus ;
-- ne pas écraser les fichiers ;
-- ne pas modifier les fichiers source ;
-- ne pas créer de copie équivalente inutile.
-
-Si certaines entrées seulement sont manquantes :
-
-1. conserver toutes les entrées existantes ;
-2. identifier précisément les entrées manquantes ;
-3. générer uniquement les éléments manquants si `PROCESS_AUTOMATION.md` l'autorise ;
-4. documenter ce qui a été généré.
-
-Ne jamais régénérer tout un corpus uniquement parce qu'une entrée est absente.
-
-## 13.3 Corpus déclaré immuable
-
-Si `PROCESS_AUTOMATION.md` indique qu'un corpus existant doit être réutilisé, le traiter comme source en lecture seule.
-
-Exemple :
+## Toutes les entrées existent
 
 ```text
-workspace\contract\
-├── 01-contrat-principal.pdf
-├── 02-annexe-a-specification-technique.pdf
-├── 03-annexe-b-livrables-cdrl.xlsx
-├── 04-annexe-c-responsabilites.xlsx
-└── 05-planning-contractuel.xlsx
+EXISTING → REUSE
 ```
 
-Le bootstrap peut :
+- réutiliser ;
+- ne pas régénérer ;
+- ne pas écraser ;
+- ne pas modifier ;
+- ne pas créer une copie équivalente.
 
-- inventorier ces fichiers ;
-- inspecter leurs noms, formats et disponibilité ;
-- les référencer dans `AUTOMATION_SPEC.md`, `TASK.md` et le README.
+## Corpus partiel
 
-Le bootstrap ne doit pas :
+```text
+PARTIAL → KEEP + GENERATE ONLY MISSING
+```
 
-- les modifier ;
-- les renommer sans nécessité ;
-- les remplacer ;
-- créer une nouvelle version synthétique du même corpus.
+- conserver les fichiers présents ;
+- identifier les éléments manquants ;
+- ne générer que les éléments manquants si autorisé et utile.
 
-## 13.4 Ne pas perdre de temps à analyser en profondeur le corpus pendant le bootstrap
+## Aucun corpus utilisable
 
-Le bootstrap doit seulement inspecter le corpus existant assez pour :
+```text
+NO DATA → GENERATE
+```
 
-- vérifier qu'il correspond aux entrées attendues ;
-- identifier les formats ;
-- préparer l'architecture de l'automatisation ;
-- préparer le benchmark si nécessaire.
+Générer le plus petit corpus réaliste permettant de tester l'automatisation.
 
-Il ne doit pas exécuter à ce stade la mission métier complète.
+## Inspection ≠ exécution métier
 
-Par exemple, pour une automatisation d'extraction d'obligations contractuelles, le bootstrap n'a pas à extraire toutes les obligations du contrat avant de générer l'agent métier.
+Le bootstrap peut inventorier et inspecter les formats.
+
+Il ne doit pas exécuter toute la mission métier simplement pour reconstruire des données de test qui existent déjà.
 
 ---
 
-# 14. Evaluator et ground truth existants
+# 15. Evaluator et ground truth existants
 
-Le benchmark est distinct des données d'entrée de l'agent métier.
-
-## 14.1 Si aucun evaluator n'existe
-
-Si aucun benchmark utilisable n'existe et que le POC doit être mesurable, créer :
+Avant de créer un evaluator, inspecter :
 
 ```text
-evaluator\
-├── ground-truth.md
-└── scoring-rubric.md
+evaluator/
+test-data/
 ```
 
-ou une structure équivalente adaptée au processus.
+Si un benchmark ou ground truth existe :
 
-## 14.2 Si un evaluator existe déjà
-
-Si le bootstrap trouve un evaluator existant déclaré comme référence :
-
-- le conserver tel quel ;
+- le préserver ;
 - ne pas le régénérer ;
-- ne pas le réécrire ;
-- ne pas le simplifier ;
-- ne pas le déplacer dans `workspace\` ;
-- ne jamais le rendre accessible à l'agent métier pendant son exécution.
+- ne pas le modifier ;
+- ne pas le déplacer dans `workspace/` ;
+- ne jamais l'exposer à l'agent métier évalué.
 
-Un evaluator existant est une **référence de test**, pas une source métier.
+Si le benchmark est externe au workspace, ne pas exiger sa copie.
 
-## 14.3 Isolation du ground truth
+Créer un nouvel evaluator seulement si :
 
-La structure recommandée est :
-
-```text
-CURRENT_WORKSPACE\
-├── workspace\             # visible par l'agent métier lors du test
-│   ├── contract\
-│   ├── data\
-│   └── output\
-│
-└── evaluator\             # hors du workspace d'exécution
-    ├── ground-truth.md
-    └── scoring-rubric.md
-```
-
-Lors du lancement ultérieur de l'automatisation métier, l'utilisateur doit pouvoir ouvrir uniquement :
-
-```text
-CURRENT_WORKSPACE\workspace\
-```
-
-sans exposer :
-
-```text
-CURRENT_WORKSPACE\evaluator\
-```
-
-à l'agent testé.
-
-## 14.4 Evaluator externe
-
-Si l'utilisateur conserve un benchmark hors du workspace courant, le bootstrap ne doit pas exiger qu'il soit copié.
-
-Il peut simplement documenter dans le README qu'un benchmark externe peut être utilisé après l'exécution.
+- aucun evaluator approprié n'existe ;
+- ou l'utilisateur le demande explicitement.
 
 ---
 
-# 15. Données synthétiques : uniquement en dernier recours
+# 16. Réutilisation des skills avant création
 
-Générer des données synthétiques seulement si au moins une entrée requise est absente et qu'aucun corpus existant approprié n'est disponible.
-
-Dans ce cas :
-
-- générer un corpus synthétique réaliste ;
-- inclure un scénario nominal ;
-- inclure au moins une exception ;
-- inclure au moins une ambiguïté ou contradiction pertinente ;
-- créer un ground truth séparé si nécessaire.
-
-Avant génération, vérifier une dernière fois qu'un fichier équivalent n'existe pas déjà.
-
-La règle est :
+Chercher dans cet ordre :
 
 ```text
-EXISTING DATA
-    ↓
-REUSE
-
-PARTIAL DATA
-    ↓
-KEEP EXISTING + GENERATE ONLY MISSING
-
-NO DATA
-    ↓
-GENERATE SYNTHETIC DATA
+CURRENT_WORKSPACE\.agents\skills\
+DOMAIN_DIR\.agents\skills\
+PLATFORM_ROOT\.agents\skills\
 ```
 
+Pour chaque besoin :
 
-# 16. Classification des composants après génération
+1. identifier la capacité nécessaire ;
+2. rechercher un skill existant ;
+3. comparer sa portée et ses dépendances ;
+4. le réutiliser s'il couvre suffisamment le besoin ;
+5. ne créer un skill local que si aucune capacité existante ne convient.
 
-Après avoir généré le POC localement, examiner chaque skill et chaque agent/spec d'agent.
+Ne pas modifier un skill DOMAIN ou COMMON sans accord explicite.
 
-Attribuer une recommandation parmi :
+---
+
+# 17. Architecture minimale
+
+Préférer :
+
+```text
+1 agent principal
++ skills existants
++ quelques skills locaux réellement nécessaires
++ outils existants
++ stockage persistant si nécessaire
+```
+
+Créer plusieurs agents uniquement pour une raison forte :
+
+- permissions différentes ;
+- isolation de risque ;
+- contexte spécialisé réellement distinct ;
+- parallélisation utile ;
+- séparation évaluateur / agent testé.
+
+Le bootstrap doit pouvoir justifier chaque agent supplémentaire.
+
+---
+
+# 18. Génération local-first
+
+Tout nouveau composant commence localement.
+
+## Agent principal
+
+Créer ou compléter :
+
+```text
+AGENTS.md
+TASK.md
+AUTOMATION_SPEC.md
+README.md
+```
+
+## Skills locaux
+
+Créer sous :
+
+```text
+CURRENT_WORKSPACE\.agents\skills\<skill-name>\SKILL.md
+```
+
+Ne pas créer directement un nouveau skill dans DOMAIN ou COMMON.
+
+## Agents additionnels
+
+Si nécessaires :
+
+```text
+agents\<agent-name>\AGENTS.md
+```
+
+## Pas de generated-automation
+
+Le workspace courant est directement l'automatisation.
+
+Ne pas créer :
+
+```text
+generated-automation/
+```
+
+---
+
+# 19. Données et état d'exécution
+
+Pour un processus volumineux, multi-étapes ou reprenable :
+
+- préférer DuckDB ou un stockage structuré local ;
+- définir des identifiants stables ;
+- persister la progression ;
+- traiter par lots ;
+- rendre les étapes idempotentes autant que possible ;
+- générer les rapports depuis l'état persistant.
+
+Ne pas utiliser un énorme fichier Markdown comme base de données d'exécution.
+
+---
+
+# 20. Gros résultats
+
+Si les sorties sont volumineuses :
+
+```text
+workspace/output/.parts/
+```
+
+peut contenir les fragments intermédiaires.
+
+Prévoir :
+
+- traitement par lots ;
+- assemblage final ;
+- reprise après interruption ;
+- absence de régénération inutile des fragments validés.
+
+Éviter les appels `write/edit` monolithiques.
+
+---
+
+# 21. Données synthétiques si réellement nécessaires
+
+Si aucun corpus utilisable n'existe, créer le minimum permettant de tester :
+
+- scénario nominal ;
+- au moins une exception pertinente ;
+- ambiguïté ou contradiction si la mission doit savoir les traiter ;
+- ground truth séparé de l'espace visible par l'agent métier.
+
+La génération synthétique doit suivre les contraintes établies par R1-R10.
+
+---
+
+# 22. AUTOMATION_SPEC.md
+
+Générer une spécification concise contenant :
+
+```text
+Objective
+Trigger
+Actors
+Inputs
+Nominal flow
+Decision rules
+Critical exceptions
+Outputs
+Human-in-the-loop
+Forbidden actions
+Technical constraints
+Persistence strategy
+Acceptance criteria
+Test strategy
+Reused components
+New local components
+```
+
+Elle doit être cohérente avec `READINESS.md`.
+
+Ne pas recopier tout l'historique Grill Me.
+
+---
+
+# 23. TASK.md
+
+`TASK.md` est la mission d'exécution de l'agent métier.
+
+Il ne doit pas contenir la mission du bootstrap.
+
+Il doit préciser :
+
+- quoi lire ;
+- quoi produire ;
+- quels chemins utiliser ;
+- quelles actions sont autonomes ;
+- quelles actions nécessitent validation humaine ;
+- quelles actions sont interdites ;
+- comment reprendre après interruption ;
+- comment utiliser les skills réutilisés.
+
+---
+
+# 24. BOOTSTRAP_TASK.md
+
+`BOOTSTRAP_TASK.md` reste distinct de `TASK.md`.
+
+Il peut demander :
+
+```text
+Use process-automation-bootstrap.
+Read PROCESS_AUTOMATION.md and inherited AGENTS.md.
+Inspect existing data before generating anything.
+Evaluate R1-R10.
+If clarification is needed, use the installed Grill Me workflow rather
+than implementing a separate interview loop.
+Persist resume state before starting Grill Me.
+After Grill Me finishes, resume automatically.
+If automatic resume fails, show the explicit resume safeguard.
+Generate the POC once the Definition of Ready is satisfied.
+Do not execute the business mission itself yet.
+```
+
+---
+
+# 25. Classification après génération
+
+Classer chaque nouveau composant :
 
 ```text
 LOCAL
@@ -592,12 +842,9 @@ COMMON_CANDIDATE
 
 ## LOCAL
 
-Conserver local si le composant :
-
-- dépend fortement du processus courant ;
-- contient des règles propres à l'automatisation ;
-- dépend d'un format ou système spécifique à ce projet ;
-- n'a pas encore été suffisamment testé.
+- spécifique à l'automatisation ;
+- encore peu testé ;
+- dépend de conventions locales.
 
 Destination :
 
@@ -607,11 +854,8 @@ CURRENT_WORKSPACE\.agents\skills\
 
 ## DOMAIN_CANDIDATE
 
-Proposer le niveau domaine si le composant :
-
-- exprime une capacité métier réutilisable ;
-- pourrait servir à plusieurs automatisations du même métier ;
-- ne dépend pas des noms, données ou contraintes d'un seul projet.
+- capacité métier réutilisable dans plusieurs automatisations du même domaine ;
+- pas liée aux noms/données d'un seul POC.
 
 Destination proposée :
 
@@ -619,22 +863,10 @@ Destination proposée :
 DOMAIN_DIR\.agents\skills\<skill-name>\
 ```
 
-Exemple Contract Management :
-
-```text
-G:\pi-workspace\domains\contract-management\
-└── .agents\
-    └── skills\
-        └── contract-obligation-register\
-```
-
 ## COMMON_CANDIDATE
 
-Proposer le niveau commun si le composant :
-
-- n'est pas spécifique au métier ;
-- apporte une capacité technique ou méthodologique générique ;
-- peut être utilisé dans plusieurs domaines.
+- capacité technique ou méthodologique générique ;
+- utile dans plusieurs domaines.
 
 Destination proposée :
 
@@ -642,51 +874,17 @@ Destination proposée :
 PLATFORM_ROOT\.agents\skills\<skill-name>\
 ```
 
-Exemple :
-
-```text
-G:\pi-workspace\
-└── .agents\
-    └── skills\
-        └── structured-data-duckdb\
-```
-
 ---
 
-# 17. Règles de promotion
+# 26. Promotion
 
-La promotion est une proposition, jamais une action implicite.
-
-Après génération et premier test, créer ou mettre à jour :
+Créer ou mettre à jour :
 
 ```text
 .bootstrap\PROMOTION_CANDIDATES.md
 ```
 
-Format recommandé :
-
-```markdown
-# Promotion candidates
-
-## contract-obligation-register
-
-Current:
-`.agents/skills/contract-obligation-register/`
-
-Recommendation:
-`DOMAIN_CANDIDATE`
-
-Suggested destination:
-`G:/pi-workspace/domains/contract-management/.agents/skills/contract-obligation-register/`
-
-Reason:
-Capacité spécifique au Contract Management mais réutilisable par plusieurs automatisations du domaine.
-
-Status:
-PROPOSED
-```
-
-Statuts possibles :
+Statuts :
 
 ```text
 PROPOSED
@@ -695,80 +893,23 @@ REJECTED
 PROMOTED
 ```
 
-Ne jamais déplacer le composant tant que l'utilisateur n'a pas explicitement accepté.
+La promotion est une proposition.
+
+Ne jamais déplacer automatiquement un composant.
 
 ---
 
-# 18. Vérifications avant promotion
+# 27. Vérification avant promotion
 
-Avant de promouvoir un skill :
+Avant toute promotion :
 
-1. vérifier qu'un skill du même nom n'existe pas déjà à destination ;
-2. rechercher des skills fonctionnellement proches ;
-3. supprimer les références propres au workspace courant ;
-4. vérifier que la `description` reste valable au nouveau périmètre ;
-5. supprimer les chemins locaux codés en dur ;
-6. vérifier les dépendances au harness ;
-7. adapter les références relatives si nécessaire ;
-8. conserver une seule source de vérité après promotion.
-
-Ne pas conserver silencieusement deux copies divergentes du même skill.
-
----
-
-# 19. Promotion d'un skill local vers le domaine
-
-Exemple :
-
-```text
-AVANT
-
-G:\pi-workspace\domains\contract-management\obligations\
-└── .agents\skills\
-    └── contract-obligation-register\
-        └── SKILL.md
-```
-
-Après accord utilisateur :
-
-```text
-APRÈS
-
-G:\pi-workspace\domains\contract-management\
-└── .agents\skills\
-    └── contract-obligation-register\
-        └── SKILL.md
-```
-
-Le workspace `obligations` doit ensuite utiliser le skill partagé et ne plus conserver une copie locale divergente.
-
----
-
-# 20. Promotion du domaine vers le commun
-
-Un skill déjà partagé au niveau domaine peut ultérieurement être proposé comme commun.
-
-Exemple :
-
-```text
-AVANT
-
-G:\pi-workspace\domains\contract-management\
-└── .agents\skills\
-    └── structured-data-duckdb\
-```
-
-Après validation qu'il n'est réellement pas spécifique au Contract Management :
-
-```text
-APRÈS
-
-G:\pi-workspace\
-└── .agents\skills\
-    └── structured-data-duckdb\
-```
-
-Ne pas promouvoir directement un composant non testé de LOCAL vers COMMON sauf raison explicite.
+1. vérifier les doublons ;
+2. rechercher les capacités fonctionnellement proches ;
+3. supprimer les chemins spécifiques au workspace ;
+4. vérifier la description et la portée ;
+5. vérifier les dépendances au harness ;
+6. adapter les références relatives ;
+7. éviter deux copies divergentes.
 
 Préférer :
 
@@ -776,64 +917,149 @@ Préférer :
 LOCAL → DOMAIN → COMMON
 ```
 
-lorsque l'expérience de plusieurs automatisations justifie progressivement l'élargissement.
+quand l'expérience le justifie.
 
 ---
 
-# 21. Portabilité entre harness
+# 28. Portabilité entre harness
 
-Pour les composants destinés à être partagés :
+Pour les skills partageables :
 
-- préférer `.agents/skills/` ;
-- respecter la structure `skill-name/SKILL.md` ;
-- placer scripts, références et templates sous le dossier du skill ;
-- exprimer les besoins métier en capacités génériques ;
-- isoler les adaptations Pi/Hermes dans des scripts, extensions ou configurations spécifiques.
+- utiliser `.agents/skills/` ;
+- respecter `skill-name/SKILL.md` ;
+- exprimer les besoins en capacités plutôt qu'en détails Pi ;
+- isoler les extensions/runtime adapters spécifiques.
 
-La portabilité du `SKILL.md` ne garantit pas la portabilité des outils utilisés.
+## Exception assumée : phase d'interview
+
+Cette V2 utilise Grill Me comme adapter d'entretien lorsqu'elle s'exécute sous Pi.
+
+La logique métier R1-R10, la reprise, la génération et la promotion restent portables.
+
+Sur un autre harness sans Grill Me :
+
+- ne pas prétendre que l'extension existe ;
+- utiliser une capacité d'entretien équivalente si elle est explicitement disponible ;
+- sinon signaler que la phase interactive dépend d'un adapter de harness.
+
+Ne pas copier le comportement interne de Grill Me dans le skill portable.
 
 ---
 
-# 22. README généré
+# 29. README généré
 
 Le README de l'automatisation doit expliquer :
 
-- l'objectif métier ;
-- comment fournir les données ;
-- comment lancer le POC ;
-- quels résultats attendre ;
-- comment utiliser l'evaluator ;
-- quels skills locaux sont créés ;
-- quels skills partagés sont réutilisés.
+- objectif métier ;
+- données attendues ;
+- lancement ;
+- résultats ;
+- reprise ;
+- evaluator ;
+- skills réutilisés ;
+- skills locaux créés.
 
 Les détails de promotion restent dans :
 
 ```text
-.bootstrap\PROMOTION_CANDIDATES.md
+.bootstrap/PROMOTION_CANDIDATES.md
 ```
+
+Les détails d'entretien restent dans les artefacts Grill Me.
 
 ---
 
-# 23. Critère de simplicité
+# 30. Vérification finale
 
-Avant de finaliser :
+Avant de terminer :
 
-> Puis-je supprimer un agent, un skill, une table ou un fichier sans perdre une capacité importante ?
+1. vérifier que R1-R10 sont prêts ;
+2. vérifier que les entrées existantes n'ont pas été écrasées ;
+3. vérifier que le ground truth n'est pas visible par l'agent métier ;
+4. vérifier que chaque nouveau skill commence LOCAL ;
+5. vérifier que les skills partagés n'ont pas été modifiés ;
+6. vérifier que `TASK.md` est exécutable ;
+7. vérifier que la reprise après interruption est prévue ;
+8. vérifier que le README permet de lancer le POC ;
+9. vérifier que les composants inutiles ont été supprimés ;
+10. ne pas lancer la mission métier si le bootstrap devait seulement la générer.
+
+Puis écrire :
+
+```text
+BOOTSTRAP_PHASE: COMPLETE
+RESUME_AFTER_INTERVIEW: false
+NEXT_ACTION: NONE
+AUTOMATION_READY: YES
+```
+
+Critère de simplicité :
+
+> Peut-on supprimer un agent, un skill, une table ou un fichier sans perdre une capacité importante ?
 
 Si oui, simplifier.
 
-Le cycle de vie de référence est :
+---
+
+# 31. Résumé du cycle V2
 
 ```text
-créer local
-    ↓
-tester
-    ↓
-évaluer la réutilisabilité
-    ↓
-proposer DOMAIN ou COMMON
-    ↓
-promotion explicite
+PROCESS_AUTOMATION.md + AGENTS + existing artifacts
+                    │
+                    ▼
+             assess R1-R10
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+       READY              GAPS BLOCKING
+          │                   │
+          │                   ▼
+          │          persist resume state
+          │                   │
+          │                   ▼
+          │                Grill Me
+          │          deterministic interview
+          │                   │
+          │                   ▼
+          │             decisions persisted
+          │                   │
+          │                   ▼
+          │           automatic continuation
+          │                   │
+          │          ┌────────┴────────┐
+          │          │                 │
+          │       success          no resume
+          │          │                 │
+          │          │                 ▼
+          │          │          explicit safeguard:
+          │          │          "Poursuis le bootstrap."
+          │          │
+          └──────────┴──────────────┐
+                                    ▼
+                             update R1-R10
+                                    │
+                                    ▼
+                            Definition of Ready
+                                    │
+                                    ▼
+                        inspect/reuse existing data
+                                    │
+                                    ▼
+                          minimal local-first POC
+                                    │
+                                    ▼
+                           evaluator if needed
+                                    │
+                                    ▼
+                      promotion candidates + README
+                                    │
+                                    ▼
+                     BOOTSTRAP_PHASE = COMPLETE
 ```
 
-Tous les nouveaux composants commencent localement.
+Principe clé :
+
+```text
+Grill Me = HOW to interview
+Bootstrap = WHAT must be known + WHAT to generate + WHEN to resume
+```
